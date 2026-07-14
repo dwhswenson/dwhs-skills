@@ -41,7 +41,13 @@ class GitHubCollector:
                     timeout=20,
                     user_agent="progress-collector",
                 )
-            user = client.get_user()
+            authenticated_user = client.get_user()
+            login = getattr(authenticated_user, "login", None)
+            if not isinstance(login, str) or not login:
+                raise ValueError("GitHub user is missing a login")
+            # AuthenticatedUser.get_events() points to GitHub's global /events feed. Resolve the
+            # authenticated login to a NamedUser so the request is /users/{login}/events instead.
+            user = client.get_user(login)
             items = [
                 _activity(event)
                 for event in user.get_events()
@@ -116,6 +122,10 @@ def _activity(event: Any) -> Activity:
     subject = _subject(payload, "pull_request", "issue", "comment", "release")
     title = _title(event_type, action, repository, subject, payload)
     url = subject.get("html_url") if isinstance(subject.get("html_url"), str) else repository_url
+    if url == repository_url and event_type.startswith("PullRequest"):
+        number = payload.get("number")
+        if isinstance(number, int) and repository_url:
+            url = f"{repository_url}/pull/{number}"
     links = [
         link(repository_url, repository, "repository"),
         link(subject.get("html_url"), subject.get("title"), "subject"),
@@ -127,6 +137,14 @@ def _activity(event: Any) -> Activity:
     if isinstance(is_public, bool):
         details["is_public"] = is_public
 
+    if event_type in {"CreateEvent", "DeleteEvent"}:
+        details.update(
+            {
+                key: payload[key]
+                for key in ("ref", "ref_type", "full_ref")
+                if isinstance(payload.get(key), str)
+            }
+        )
     if event_type == "PushEvent":
         commits = [
             {key: commit[key] for key in ("sha", "message") if isinstance(commit.get(key), str)}
@@ -140,19 +158,22 @@ def _activity(event: Any) -> Activity:
                 "commits": commits,
             }
         )
-    elif subject:
+    if subject:
         details["subject"] = {
             key: subject[key]
             for key in ("id", "number", "title", "html_url", "state")
             if isinstance(subject.get(key), (str, int))
         }
-        comment = _mapping(payload.get("comment"))
-        if comment:
-            links.append(link(comment.get("html_url"), "Comment", "comment"))
-        review = _mapping(payload.get("review"))
-        if review:
-            details["review_state"] = review.get("state")
-            links.append(link(review.get("html_url"), "Review", "review"))
+    comment = _mapping(payload.get("comment"))
+    if comment:
+        links.append(link(comment.get("html_url"), "Comment", "comment"))
+    review = _mapping(payload.get("review"))
+    if review:
+        details["review_state"] = review.get("state")
+        links.append(link(review.get("html_url"), "Review", "review"))
+        review_url = review.get("html_url")
+        if event_type == "PullRequestReviewEvent" and isinstance(review_url, str):
+            url = review_url
     return Activity(
         event_id,
         _kind(event_type, action),
@@ -176,12 +197,59 @@ def _title(
     payload: dict[str, Any],
 ) -> str:
     subject_title = subject.get("title") if isinstance(subject.get("title"), str) else None
+    subject_suffix = (
+        f": {subject_title}" if subject_title else f" in {repository or 'a repository'}"
+    )
     if event_type == "PushEvent":
         count = payload.get("size", 0)
-        return f"Pushed {count} commit{'s' if count != 1 else ''} to {repository or 'a repository'}"
+        ref = _short_ref(payload.get("ref"))
+        destination = f" to {ref}" if ref else ""
+        if isinstance(count, int) and count > 0:
+            return (
+                f"Pushed {count} commit{'s' if count != 1 else ''}{destination}"
+                f" in {repository or 'a repository'}"
+            )
+        return f"Pushed{destination} in {repository or 'a repository'}"
+    if event_type == "CreateEvent":
+        ref_type = payload.get("ref_type")
+        ref = payload.get("ref")
+        if ref_type == "repository":
+            return f"Created repository {repository or ''}".rstrip()
+        if isinstance(ref_type, str) and isinstance(ref, str):
+            return f"Created {ref_type} {ref!r} in {repository or 'a repository'}"
+        return f"Created in {repository or 'a repository'}"
+    if event_type == "DeleteEvent":
+        ref_type = payload.get("ref_type")
+        ref = payload.get("ref")
+        if isinstance(ref_type, str) and isinstance(ref, str):
+            return f"Deleted {ref_type} {ref!r} in {repository or 'a repository'}"
+        return f"Deleted from {repository or 'a repository'}"
+    if event_type == "PullRequestEvent":
+        verb = {
+            "opened": "Opened pull request",
+            "closed": "Closed pull request",
+            "merged": "Merged pull request",
+            "reopened": "Reopened pull request",
+        }.get(action or "", "Updated pull request")
+        return f"{verb}{subject_suffix}"
+    if event_type == "PullRequestReviewEvent":
+        state = _mapping(payload.get("review")).get("state")
+        verb = {
+            "APPROVED": "Approved pull request",
+            "CHANGES_REQUESTED": "Requested changes on pull request",
+            "COMMENTED": "Commented on pull request",
+        }.get(state, "Submitted pull request review")
+        return f"{verb}{subject_suffix}"
     if subject_title:
         verb = action.replace("_", " ") if action else event_type.removesuffix("Event")
         return f"{verb.capitalize()}: {subject_title}"
-    return f"{event_type.removesuffix('Event')} activity" + (
-        f" in {repository}" if repository else ""
-    )
+    return f"{event_type.removesuffix('Event')} activity in {repository or 'a repository'}"
+
+
+def _short_ref(value: Any) -> str | None:
+    if not isinstance(value, str):
+        return None
+    for prefix in ("refs/heads/", "refs/tags/"):
+        if value.startswith(prefix):
+            return value.removeprefix(prefix)
+    return value

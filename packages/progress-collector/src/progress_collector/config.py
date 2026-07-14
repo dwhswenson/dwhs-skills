@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import subprocess
 from dataclasses import dataclass
 from typing import Any
 
@@ -14,13 +15,37 @@ def _required(name: str) -> str:
     return value
 
 
+def _github_token_from_gh() -> str | None:
+    """Return the active GitHub CLI token, without exposing command failures."""
+    try:
+        result = subprocess.run(
+            ["gh", "auth", "token"],
+            capture_output=True,
+            check=True,
+            text=True,
+            timeout=10,
+        )
+    except (FileNotFoundError, subprocess.SubprocessError):
+        return None
+    token = result.stdout.strip()
+    return token or None
+
+
 @dataclass(frozen=True)
 class GitHubConfig:
     token: str
 
     @classmethod
     def from_env(cls) -> GitHubConfig:
-        return cls(token=_required("PROGRESS_COLLECTOR_GITHUB_TOKEN"))
+        for name in ("PROGRESS_COLLECTOR_GITHUB_TOKEN", "GITHUB_TOKEN", "GH_TOKEN"):
+            if token := os.environ.get(name):
+                return cls(token=token)
+        if token := _github_token_from_gh():
+            return cls(token=token)
+        raise ValueError(
+            "Missing GitHub authentication: set PROGRESS_COLLECTOR_GITHUB_TOKEN, "
+            "GITHUB_TOKEN, or GH_TOKEN, or run gh auth login"
+        )
 
 
 @dataclass(frozen=True)

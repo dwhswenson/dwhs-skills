@@ -413,7 +413,7 @@ packages:
 - pypi: ./packages/progress-collector
   name: progress-collector
   version: 0.1.0
-  sha256: 28b7b0f81c5207d071ac983dfa4cb2c81227d89f63004ab2fbe92d154d3c2ee4
+  sha256: b026eff99244241bda1d62ce6735ba4ed67d8c51d964583093e66247f6f4fd81
   requires_dist:
   - google-api-python-client>=2.0,<3
   - google-auth>=2.0,<3
