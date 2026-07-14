@@ -1,0 +1,9 @@
+[workspace]
+channels = ["conda-forge"]
+platforms = ["osx-64"]
+
+[dependencies]
+python = "3.11.*"
+
+[pypi-dependencies]
+pr_review_queue = { path = "packages/pr-review-queue", editable = true }
