@@ -7,3 +7,11 @@ python = "3.11.*"
 
 [pypi-dependencies]
 pr_review_queue = { path = "packages/pr-review-queue", editable = true }
+progress_collector = { path = "packages/progress-collector", editable = true }
+
+[feature.dev.pypi-dependencies]
+pytest = ">=8,<10"
+ruff = ">=0.11,<1"
+
+[environments]
+dev = ["dev"]
