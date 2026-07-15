@@ -6,6 +6,7 @@ platforms = ["osx-64"]
 python = "3.11.*"
 
 [pypi-dependencies]
+authored_pr_queue = { path = "packages/authored-pr-queue", editable = true }
 pr_review_queue = { path = "packages/pr-review-queue", editable = true }
 progress_collector = { path = "packages/progress-collector", editable = true }
 

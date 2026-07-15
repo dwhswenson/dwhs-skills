@@ -53,6 +53,7 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/49/d3/b8441a820a491ddfc024b0b0cf0393375b75ea13866d9c66727e54c2fc80/typing_extensions-4.16.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/a9/99/3ae339466c9183ea5b8ae87b34c0b897eda475d2aec2307cae60e5cd4f29/uritemplate-4.2.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/7f/3e/5db95bcf282c52709639744ca2a8b149baccf648e39c8cc87553df9eae0c/urllib3-2.7.0-py3-none-any.whl
+      - pypi: ./packages/authored-pr-queue
       - pypi: ./packages/pr-review-queue
       - pypi: ./packages/progress-collector
   dev:
@@ -114,9 +115,19 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/49/d3/b8441a820a491ddfc024b0b0cf0393375b75ea13866d9c66727e54c2fc80/typing_extensions-4.16.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/a9/99/3ae339466c9183ea5b8ae87b34c0b897eda475d2aec2307cae60e5cd4f29/uritemplate-4.2.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/7f/3e/5db95bcf282c52709639744ca2a8b149baccf648e39c8cc87553df9eae0c/urllib3-2.7.0-py3-none-any.whl
+      - pypi: ./packages/authored-pr-queue
       - pypi: ./packages/pr-review-queue
       - pypi: ./packages/progress-collector
 packages:
+- pypi: ./packages/authored-pr-queue
+  name: authored-pr-queue
+  version: 0.1.0
+  sha256: d5b711c903f111fe2d156c8563faaeb4db4c87bfb721293d0c53afa1a0bd228a
+  requires_dist:
+  - pygithub>=2.8,<3
+  - pytest>=8,<10 ; extra == 'dev'
+  - ruff>=0.11,<1 ; extra == 'dev'
+  requires_python: '>=3.11'
 - pypi: https://files.pythonhosted.org/packages/47/ec/3e4bff3d696121631174471505a7669d9d22c183991b4dcc245101603cec/boto3-1.43.48-py3-none-any.whl
   name: boto3
   version: 1.43.48
