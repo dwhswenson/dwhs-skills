@@ -122,7 +122,7 @@ packages:
 - pypi: ./packages/authored-pr-queue
   name: authored-pr-queue
   version: 0.1.0
-  sha256: d5b711c903f111fe2d156c8563faaeb4db4c87bfb721293d0c53afa1a0bd228a
+  sha256: 374898c68e5bd505707f109154e0263bc08efce1b56242ee95b34c2d90c86bae
   requires_dist:
   - pygithub>=2.8,<3
   - pytest>=8,<10 ; extra == 'dev'

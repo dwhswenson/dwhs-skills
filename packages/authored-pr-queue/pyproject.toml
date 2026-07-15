@@ -11,6 +11,9 @@ dependencies = [
   "PyGithub>=2.8,<3",
 ]
 
+[project.scripts]
+authored-pr-queue = "authored_pr_queue.cli:main"
+
 [project.optional-dependencies]
 dev = [
   "pytest>=8,<10",
