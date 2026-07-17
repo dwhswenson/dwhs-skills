@@ -7,6 +7,8 @@ import subprocess
 from dataclasses import dataclass
 from typing import Any
 
+from .auth_config import AuthConfigStore
+
 
 def _required(name: str) -> str:
     value = os.environ.get(name)
@@ -47,6 +49,15 @@ class GitHubConfig:
             "GITHUB_TOKEN, or GH_TOKEN, or run gh auth login"
         )
 
+    @classmethod
+    def from_defaults(cls, config_file: str | os.PathLike[str] | None = None) -> GitHubConfig:
+        names = ("PROGRESS_COLLECTOR_GITHUB_TOKEN", "GITHUB_TOKEN", "GH_TOKEN")
+        if any(os.environ.get(name) for name in names):
+            return cls.from_env()
+        if stored := AuthConfigStore(config_file).source("github"):
+            return cls(token=stored["token"])
+        return cls.from_env()
+
 
 @dataclass(frozen=True)
 class LinearConfig:
@@ -59,6 +70,14 @@ class LinearConfig:
             token=_required("PROGRESS_COLLECTOR_LINEAR_TOKEN"),
             authorization_scheme=os.environ.get("PROGRESS_COLLECTOR_LINEAR_AUTHORIZATION_SCHEME"),
         )
+
+    @classmethod
+    def from_defaults(cls, config_file: str | os.PathLike[str] | None = None) -> LinearConfig:
+        if os.environ.get("PROGRESS_COLLECTOR_LINEAR_TOKEN"):
+            return cls.from_env()
+        if stored := AuthConfigStore(config_file).source("linear"):
+            return cls(token=stored["token"])
+        return cls.from_env()
 
 
 @dataclass(frozen=True)
@@ -96,6 +115,27 @@ class CalendarConfig:
                 "PROGRESS_COLLECTOR_GOOGLE_TOKEN_URI", "https://oauth2.googleapis.com/token"
             ),
         )
+
+    @classmethod
+    def from_defaults(cls, config_file: str | os.PathLike[str] | None = None) -> CalendarConfig:
+        names = (
+            "PROGRESS_COLLECTOR_GOOGLE_CALENDAR_IDS",
+            "PROGRESS_COLLECTOR_GOOGLE_CLIENT_ID",
+            "PROGRESS_COLLECTOR_GOOGLE_CLIENT_SECRET",
+            "PROGRESS_COLLECTOR_GOOGLE_REFRESH_TOKEN",
+            "PROGRESS_COLLECTOR_GOOGLE_TOKEN_URI",
+        )
+        if any(os.environ.get(name) for name in names):
+            return cls.from_env()
+        if stored := AuthConfigStore(config_file).source("google_calendar"):
+            return cls(
+                calendar_ids=tuple(stored["calendar_ids"]),
+                client_id=stored["client_id"],
+                client_secret=stored["client_secret"],
+                refresh_token=stored["refresh_token"],
+                token_uri=stored["token_uri"],
+            )
+        return cls.from_env()
 
     def resolved_credentials(self) -> Any:
         if self.credentials is not None:

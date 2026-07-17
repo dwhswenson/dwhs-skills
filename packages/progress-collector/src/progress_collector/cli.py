@@ -39,7 +39,7 @@ def _selected_sources(args: argparse.Namespace) -> tuple[str, ...]:
     return selected or tuple(source for source, _ in requested)
 
 
-def _configs(sources: Sequence[str]) -> dict[str, object]:
+def _configs(sources: Sequence[str], config_file: str | None = None) -> dict[str, object]:
     configs: dict[str, object] = {}
     config_types = {
         "github": GitHubConfig,
@@ -48,7 +48,7 @@ def _configs(sources: Sequence[str]) -> dict[str, object]:
     }
     for source in sources:
         try:
-            configs[source] = config_types[source].from_env()
+            configs[source] = config_types[source].from_defaults(config_file)
         except ValueError as exc:
             label = {"google_calendar": "calendar"}.get(source, source)
             raise CLIConfigurationError(f"Unable to configure {label}: {exc}") from exc
@@ -119,6 +119,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--calendar", action="store_true", help="collect Google Calendar events")
     parser.add_argument("--json", action="store_true", help="print the collected JSON document")
     parser.add_argument(
+        "--auth-config", help="portable auth configuration file (overrides the default location)"
+    )
+    parser.add_argument(
         "--start", type=_parse_datetime, help="ISO 8601 start (default: today at 00:00 UTC)"
     )
     parser.add_argument("--end", type=_parse_datetime, help="ISO 8601 end (default: now)")
@@ -134,7 +137,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         parser.error(str(exc))
     sources = _selected_sources(args)
     try:
-        configs = _configs(sources)
+        configs = _configs(sources, args.auth_config)
     except CLIConfigurationError as exc:
         print(f"Error: {exc}", file=sys.stderr)
         return 1

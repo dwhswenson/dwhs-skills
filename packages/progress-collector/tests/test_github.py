@@ -114,7 +114,14 @@ def test_github_uses_specific_titles_for_create_pr_review_and_empty_push():
 def test_github_config_uses_standard_environment_token(monkeypatch):
     monkeypatch.delenv("PROGRESS_COLLECTOR_GITHUB_TOKEN", raising=False)
     monkeypatch.setenv("GITHUB_TOKEN", "standard-token")
+    monkeypatch.setattr("progress_collector.config._github_token_from_gh", lambda: "gh-token")
     assert GitHubConfig.from_env().token == "standard-token"
+
+
+def test_github_config_uses_package_token_before_standard_environment_token(monkeypatch):
+    monkeypatch.setenv("PROGRESS_COLLECTOR_GITHUB_TOKEN", "package-token")
+    monkeypatch.setenv("GITHUB_TOKEN", "standard-token")
+    assert GitHubConfig.from_env().token == "package-token"
 
 
 def test_github_config_falls_back_to_gh_auth_token(monkeypatch):
