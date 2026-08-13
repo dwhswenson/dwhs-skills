@@ -1,0 +1,3 @@
+repository_name = "daily-progress-lambdacron"
+image_tag       = "latest"
+platform        = "linux/amd64"

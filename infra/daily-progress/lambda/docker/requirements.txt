@@ -1,0 +1,3 @@
+boto3>=1.42,<2
+lambdacron @ https://github.com/omsf/lambdacron/archive/refs/heads/main.tar.gz
+tzdata>=2025.2
