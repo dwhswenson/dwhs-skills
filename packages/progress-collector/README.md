@@ -48,9 +48,17 @@ Neither `status` nor any success/error output displays tokens.
 
 ### Google Calendar
 
-Before running Google setup, create a Google Cloud project, enable the Google Calendar API, and
-create a **Desktop application** OAuth client. Download its client JSON. The setup requests only
-`calendar.events.readonly` and requires at least one explicit calendar ID (`primary` is valid).
+Before running Google setup:
+
+1. Create or select a [Google Cloud project](https://console.cloud.google.com/projectcreate).
+2. [Enable the Google Calendar API](https://console.cloud.google.com/apis/library/calendar-json.googleapis.com).
+3. Configure the [Google Auth Platform audience and consent screen](https://support.google.com/cloud/answer/15549945).
+4. On the [Google Auth Platform Clients page](https://console.cloud.google.com/auth/clients),
+   create a **Desktop application** OAuth client and download its JSON credentials.
+
+The setup uses Google's [desktop OAuth loopback flow](https://developers.google.com/identity/protocols/oauth2/native-app),
+requests only `calendar.events.readonly`, and requires at least one explicit calendar ID
+(`primary` is valid).
 
 ```shell
 collect-progress-auth google login \
@@ -64,8 +72,10 @@ stores the client metadata, selected calendar IDs, and refresh token; it does no
 token. Do not use a pasted authorization code or Google's deprecated out-of-band flow.
 
 For a long-lived agent, do not leave an External Google OAuth app in **Testing**: Calendar refresh
-tokens issued there expire after seven days. Use a production-published app, or a Workspace
-Internal/Trusted app when every user belongs to that organization.
+tokens issued there expire after seven days. Move it to Production, or use a Workspace
+Internal/Trusted app when every user belongs to that organization. See Google's
+[OAuth app-state overview](https://developers.google.com/identity/protocols/oauth2/production-readiness/overview)
+and [refresh-token policy](https://developers.google.com/identity/protocols/oauth2).
 
 For a machine with no browser, bind a known loopback port on the remote host and forward it from
 your workstation before opening the printed URL locally:
