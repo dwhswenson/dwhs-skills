@@ -15,7 +15,28 @@ locals {
 data "aws_caller_identity" "current" {}
 
 provider "aws" {
-  region = var.aws_region
+  region                      = var.aws_region
+  access_key                  = var.aws_endpoint_url == null ? null : "test"
+  secret_key                  = var.aws_endpoint_url == null ? null : "test"
+  s3_use_path_style           = var.aws_endpoint_url != null
+  skip_credentials_validation = var.aws_endpoint_url != null
+  skip_metadata_api_check     = var.aws_endpoint_url != null
+  skip_region_validation      = var.aws_endpoint_url != null
+
+  dynamic "endpoints" {
+    for_each = var.aws_endpoint_url == null ? [] : [var.aws_endpoint_url]
+
+    content {
+      cloudwatchevents = endpoints.value
+      ecr              = endpoints.value
+      iam              = endpoints.value
+      lambda           = endpoints.value
+      s3               = endpoints.value
+      secretsmanager   = endpoints.value
+      sns              = endpoints.value
+      sts              = endpoints.value
+    }
+  }
 }
 
 resource "aws_s3_bucket" "progress" {

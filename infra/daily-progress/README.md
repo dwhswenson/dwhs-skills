@@ -113,6 +113,7 @@ pixi run -e dev ruff check packages/progress-collector infra/daily-progress
 pixi run -e dev terraform-format
 pixi run -e dev terraform-validate
 pixi run -e dev terraform-test
+pixi run -e dev terraform-test-floci
 docker buildx build --platform linux/amd64 \
   -f infra/daily-progress/lambda/docker/Dockerfile .
 ```
@@ -121,6 +122,28 @@ docker buildx build --platform linux/amd64 \
 mock providers and module/resource overrides, so they neither contact AWS nor execute Docker build
 or image-publication commands. They verify the storage protections, IAM policy inputs, tags,
 outputs, variable validation, and public-image configuration.
+
+`terraform-test-floci` is the explicit Docker-backed E2E layer. It requires a working Docker
+engine whose socket permits Floci to start sibling ECR and Lambda containers. It starts the pinned
+`floci/floci:1.6.0` image with fixed fake credentials, publishes a small `linux/amd64` probe image
+to Floci's private ECR, and runs `tofu test` against the scheduled deployment. The probe reads a
+sentinel from the Terraform-created secret, writes metadata-only JSON to the protected bucket, and
+publishes a metadata-only result to SNS. The runner destroys the OpenTofu test resources, stops
+Floci, and removes the local probe image even on failure. Ordinary Python and native Terraform
+tasks never start Docker.
+
+The E2E test has two narrowly scoped compatibility overrides. Floci 1.6.0 does not implement S3's
+ownership-controls API, so that one resource is overridden while the remaining bucket protections
+are applied. The current lambdacron module declares its own AWS provider, which prevents this root
+from passing the Floci endpoint into it; the test therefore overrides that module and applies an
+equivalent Lambda, EventBridge target, permission, and SNS topic in its verification fixture. Once
+lambdacron removes its internal provider block and inherits the caller's provider, that override can
+be removed and the actual module can be included directly in the E2E apply.
+
+No real AWS credentials are read by the Floci runner. The E2E probe intentionally verifies only
+infrastructure wiring; the existing Python suite remains responsible for GitHub, Linear, Google,
+and collector behavior. Floci's default IAM mode is not AWS-grade policy enforcement, so the native
+contract tests remain authoritative for the exact IAM document.
 
 No remote state backend or deployment automation is defined here. Choose and configure a backend
 appropriate for the AWS account before using this in an automated deployment.

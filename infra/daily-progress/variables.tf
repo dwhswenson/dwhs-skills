@@ -3,6 +3,17 @@ variable "aws_region" {
   type        = string
 }
 
+variable "aws_endpoint_url" {
+  description = "Optional AWS-compatible endpoint used by local infrastructure tests."
+  type        = string
+  default     = null
+
+  validation {
+    condition     = try(startswith(var.aws_endpoint_url, "http://") || startswith(var.aws_endpoint_url, "https://"), var.aws_endpoint_url == null)
+    error_message = "aws_endpoint_url must be null or an HTTP(S) URL."
+  }
+}
+
 variable "schedule_expression" {
   description = "UTC EventBridge schedule expression. The default is 4 AM CST / 5 AM CDT."
   type        = string
