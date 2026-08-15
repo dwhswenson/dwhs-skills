@@ -110,14 +110,17 @@ From the repository root:
 ```shell
 pixi run -e dev python -m pytest packages/progress-collector/tests infra/daily-progress/tests
 pixi run -e dev ruff check packages/progress-collector infra/daily-progress
-tofu -chdir=infra/daily-progress fmt -check -recursive
-tofu -chdir=infra/daily-progress init -backend=false
-tofu -chdir=infra/daily-progress validate
-tofu -chdir=infra/daily-progress/lambda init -backend=false
-tofu -chdir=infra/daily-progress/lambda validate
+pixi run -e dev terraform-format
+pixi run -e dev terraform-validate
+pixi run -e dev terraform-test
 docker buildx build --platform linux/amd64 \
   -f infra/daily-progress/lambda/docker/Dockerfile .
 ```
+
+`terraform-test` runs isolated OpenTofu contract tests for both Terraform roots. The tests use
+mock providers and module/resource overrides, so they neither contact AWS nor execute Docker build
+or image-publication commands. They verify the storage protections, IAM policy inputs, tags,
+outputs, variable validation, and public-image configuration.
 
 No remote state backend or deployment automation is defined here. Choose and configure a backend
 appropriate for the AWS account before using this in an automated deployment.

@@ -14,5 +14,13 @@ progress_collector = { path = "packages/progress-collector", editable = true }
 pytest = ">=8,<10"
 ruff = ">=0.11,<1"
 
+[feature.dev.dependencies]
+opentofu = "1.12.*"
+
+[feature.dev.tasks]
+terraform-format = "tofu -chdir=infra/daily-progress fmt -check -recursive"
+terraform-validate = "tofu -chdir=infra/daily-progress init -backend=false && tofu -chdir=infra/daily-progress validate && tofu -chdir=infra/daily-progress/lambda init -backend=false && tofu -chdir=infra/daily-progress/lambda validate"
+terraform-test = "tofu -chdir=infra/daily-progress init -backend=false && tofu -chdir=infra/daily-progress test -test-directory=tftests && tofu -chdir=infra/daily-progress/lambda init -backend=false && tofu -chdir=infra/daily-progress/lambda test -test-directory=tftests"
+
 [environments]
 dev = ["dev"]
