@@ -42,7 +42,7 @@ provider "aws" {
 resource "aws_s3_bucket" "progress" {
   bucket        = var.bucket_name
   bucket_prefix = var.bucket_name == null ? "daily-progress-" : null
-  force_destroy = false
+  force_destroy = var.bucket_force_destroy
 
   tags = local.tags
 }
@@ -106,7 +106,6 @@ module "lambda_image_republish" {
 module "lambdacron" {
   source = "git::https://github.com/omsf/lambdacron.git"
 
-  aws_region                  = var.aws_region
   lambda_image_uri            = module.lambda_image_republish.lambda_image_uri_with_digest
   schedule_expression         = var.schedule_expression
   topic_name                  = var.topic_name

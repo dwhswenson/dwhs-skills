@@ -125,20 +125,29 @@ outputs, variable validation, and public-image configuration.
 
 `terraform-test-floci` is the explicit Docker-backed E2E layer. It requires a working Docker
 engine whose socket permits Floci to start sibling ECR and Lambda containers. It starts the pinned
-`floci/floci:1.6.0` image with fixed fake credentials, publishes a small `linux/amd64` probe image
+`floci/floci:2.1.0` image with fixed fake credentials, publishes a small `linux/amd64` probe image
 to Floci's private ECR, and runs `tofu test` against the scheduled deployment. The probe reads a
 sentinel from the Terraform-created secret, writes metadata-only JSON to the protected bucket, and
 publishes a metadata-only result to SNS. The runner destroys the OpenTofu test resources, stops
 Floci, and removes the local probe image even on failure. Ordinary Python and native Terraform
-tasks never start Docker.
+tasks never start Docker. The disposable test bucket sets `bucket_force_destroy = true` so the
+probe object is removed during teardown; the production default remains `false`.
 
-The E2E test has two narrowly scoped compatibility overrides. Floci 1.6.0 does not implement S3's
-ownership-controls API, so that one resource is overridden while the remaining bucket protections
-are applied. The current lambdacron module declares its own AWS provider, which prevents this root
-from passing the Floci endpoint into it; the test therefore overrides that module and applies an
-equivalent Lambda, EventBridge target, permission, and SNS topic in its verification fixture. Once
-lambdacron removes its internal provider block and inherits the caller's provider, that override can
-be removed and the actual module can be included directly in the E2E apply.
+The E2E test has two narrowly scoped Floci compatibility overrides. Floci 2.1.0 does not emulate
+ECR Public, so the image-republish module is overridden with the probe pre-seeded in Floci's
+private ECR using its digest-qualified URI. Floci also does not implement S3's ownership-controls
+API, so that resource is
+overridden while the remaining bucket protections are applied. Lambdacron inherits the
+endpoint-configured AWS provider and its real Lambda, IAM, EventBridge, and SNS resources are
+applied and verified.
+
+Docker Desktop 4.14.0 (Docker Engine 20.10.21) is known to reject the localhost image pulls Floci
+uses for Lambda execution. Upgrade Docker Desktop if the E2E task fails with an `unknown image`
+error from the Docker `/images/create` API.
+
+The path-filtered `daily-progress Floci E2E` GitHub Actions workflow runs the same explicit Floci
+task on an Ubuntu Docker runner for changes to this infrastructure, its root Pixi environment, or
+the workflow itself. It can also be started manually with `workflow_dispatch`.
 
 No real AWS credentials are read by the Floci runner. The E2E probe intentionally verifies only
 infrastructure wiring; the existing Python suite remains responsible for GitHub, Linear, Google,

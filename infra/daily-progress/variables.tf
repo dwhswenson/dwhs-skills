@@ -47,6 +47,12 @@ variable "bucket_name" {
   }
 }
 
+variable "bucket_force_destroy" {
+  description = "Whether to delete objects when destroying the bucket. Keep false for production; local E2E tests enable it for cleanup."
+  type        = bool
+  default     = false
+}
+
 variable "object_prefix" {
   description = "S3 key prefix beneath which YYYY-MM-DD/progress.json objects are written."
   type        = string

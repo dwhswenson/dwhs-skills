@@ -1,6 +1,6 @@
 [workspace]
 channels = ["conda-forge"]
-platforms = ["osx-64"]
+platforms = ["osx-64", "linux-64"]
 
 [dependencies]
 python = "3.11.*"

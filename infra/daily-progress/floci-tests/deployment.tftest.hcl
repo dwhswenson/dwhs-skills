@@ -1,23 +1,14 @@
 variables {
   aws_region             = "us-east-1"
+  bucket_force_destroy   = true
   bucket_name            = "daily-progress-e2e"
   collection_timezone    = "America/Chicago"
   lambda_memory_size     = 256
-  lambda_public_repo_url = "unused"
+  lambda_public_repo_url = "public.ecr.aws/example/daily-progress"
   lambda_timeout         = 30
   object_prefix          = "e2e"
   secret_name            = "daily-progress-e2e-auth"
-}
-
-run "setup_execution_role" {
-  module {
-    source = "./floci-tests/setup"
-  }
-
-  variables {
-    aws_endpoint_url = var.aws_endpoint_url
-    aws_region       = var.aws_region
-  }
+  topic_name             = "daily-progress-e2e-results.fifo"
 }
 
 run "deploy_owned_infrastructure" {
@@ -29,21 +20,9 @@ run "deploy_owned_infrastructure" {
     }
   }
 
-  # Floci 1.6.0 does not implement the S3 ownership-controls API.
+  # Floci 2.1.0 does not implement the S3 ownership-controls API.
   override_resource {
     target = aws_s3_bucket_ownership_controls.progress
-  }
-
-  # Lambdacron currently declares an internal provider and cannot inherit the Floci endpoint.
-  override_module {
-    target = module.lambdacron
-
-    outputs = {
-      scheduled_lambda_arn       = "arn:aws:lambda:us-east-1:000000000000:function:daily-progress-e2e-probe"
-      scheduled_lambda_role_arn  = "arn:aws:iam::000000000000:role/daily-progress-e2e-probe-role"
-      scheduled_lambda_role_name = "daily-progress-e2e-probe-role"
-      sns_topic_arn              = "arn:aws:sns:us-east-1:000000000000:daily-progress-e2e-results.fifo"
-    }
   }
 
   assert {
@@ -66,34 +45,56 @@ run "deploy_owned_infrastructure" {
   }
 
   assert {
-    condition     = aws_iam_role_policy_attachment.scheduled_lambda_storage.role == run.setup_execution_role.role_name
-    error_message = "The daily-progress storage policy must attach to the supplied execution role."
+    condition     = aws_iam_role_policy_attachment.scheduled_lambda_storage.role == module.lambdacron.scheduled_lambda_role_name
+    error_message = "The daily-progress storage policy must attach to lambdacron's execution role."
+  }
+
+  assert {
+    condition = (
+      module.lambdacron.schedule_rule_name == "daily-progress-collector-schedule" &&
+      endswith(module.lambdacron.scheduled_lambda_arn, ":function:daily-progress-collector") &&
+      endswith(module.lambdacron.sns_topic_arn, ":daily-progress-e2e-results.fifo")
+    )
+    error_message = "Lambdacron must create the scheduled Lambda, EventBridge rule, and FIFO result topic."
   }
 }
 
 run "invoke_probe" {
   module {
-    source = "./floci-tests/verify"
+    source = "./floci-tests/invoke"
   }
 
   variables {
-    aws_endpoint_url    = var.aws_endpoint_url
-    aws_region          = var.aws_region
-    bucket_name         = run.deploy_owned_infrastructure.bucket_name
-    collection_timezone = var.collection_timezone
-    lambda_image_uri    = var.lambda_public_repo_url
-    object_prefix       = var.object_prefix
-    role_arn            = run.setup_execution_role.role_arn
-    role_name           = run.setup_execution_role.role_name
-    secret_arn          = run.deploy_owned_infrastructure.progress_collector_secret_arn
+    aws_endpoint_url = var.aws_endpoint_url
+    aws_region       = "us-east-1"
+    lambda_name      = "daily-progress-collector"
+    secret_arn       = run.deploy_owned_infrastructure.progress_collector_secret_arn
   }
 
   assert {
     condition = (
       jsondecode(output.invocation_result).status == "ok" &&
-      jsondecode(output.invocation_result).secret_loaded
+      jsondecode(output.invocation_result).secret_loaded &&
+      length(jsondecode(output.invocation_result).sns_message_id) > 0
     )
-    error_message = "The image-backed probe Lambda must load the Terraform-created secret."
+    error_message = "The deployed lambdacron Lambda must read the secret and publish to SNS."
+  }
+}
+
+run "verify_probe" {
+  module {
+    source = "./floci-tests/verify"
+  }
+
+  variables {
+    aws_endpoint_url  = var.aws_endpoint_url
+    aws_region        = "us-east-1"
+    bucket_name       = run.deploy_owned_infrastructure.bucket_name
+    invocation_result = run.invoke_probe.invocation_result
+    lambda_name       = "daily-progress-collector"
+    object_prefix     = "e2e"
+    secret_arn        = run.deploy_owned_infrastructure.progress_collector_secret_arn
+    sns_topic_arn     = run.deploy_owned_infrastructure.sns_topic_arn
   }
 
   assert {
@@ -109,20 +110,17 @@ run "invoke_probe" {
 
   assert {
     condition = (
-      output.lambda_environment.DAILY_PROGRESS_BUCKET == "daily-progress-e2e" &&
-      output.lambda_environment.DAILY_PROGRESS_PREFIX == "e2e" &&
-      output.lambda_environment.PROGRESS_COLLECTOR_SECRET_ID == run.deploy_owned_infrastructure.progress_collector_secret_arn &&
-      output.lambda_environment.SNS_TOPIC_ARN == output.sns_topic_arn
+      output.lambda_environment["DAILY_PROGRESS_BUCKET"] == "daily-progress-e2e" &&
+      output.lambda_environment["DAILY_PROGRESS_PREFIX"] == "e2e" &&
+      output.lambda_environment["DAILY_PROGRESS_TIMEZONE"] == "America/Chicago" &&
+      output.lambda_environment["PROGRESS_COLLECTOR_SECRET_ID"] == output.secret_arn &&
+      output.lambda_environment["SNS_TOPIC_ARN"] == output.sns_topic_arn
     )
     error_message = "The probe Lambda must receive the expected Terraform resource identifiers."
   }
 
   assert {
-    condition = (
-      output.schedule_expression == "cron(0 10 * * ? *)" &&
-      output.schedule_target_arn == "arn:aws:lambda:us-east-1:000000000000:function:daily-progress-e2e-probe" &&
-      length(jsondecode(output.invocation_result).sns_message_id) > 0
-    )
-    error_message = "The E2E fixture must wire EventBridge and publish a result to SNS."
+    condition     = endswith(output.lambda_arn, ":function:daily-progress-collector")
+    error_message = "The verified Lambda must be the function deployed by lambdacron."
   }
 }

@@ -1,0 +1,46 @@
+name: daily-progress Floci E2E
+
+on:
+  pull_request:
+    paths:
+      - "infra/daily-progress/**"
+      - "pixi.toml"
+      - "pixi.lock"
+      - ".github/workflows/daily-progress-floci-ci.yaml"
+  push:
+    paths:
+      - "infra/daily-progress/**"
+      - "pixi.toml"
+      - "pixi.lock"
+      - ".github/workflows/daily-progress-floci-ci.yaml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: daily-progress-floci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  floci:
+    name: Floci E2E
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Set up Pixi
+        uses: prefix-dev/setup-pixi@v0.10.0
+        with:
+          environments: dev
+          frozen: true
+          cache: true
+
+      - name: Show Docker environment
+        run: docker version
+
+      - name: Run Floci E2E test
+        run: pixi run -e dev terraform-test-floci

@@ -21,11 +21,11 @@ variable "bucket_name" {
   type = string
 }
 
-variable "collection_timezone" {
+variable "lambda_name" {
   type = string
 }
 
-variable "lambda_image_uri" {
+variable "invocation_result" {
   type = string
 }
 
@@ -33,15 +33,11 @@ variable "object_prefix" {
   type = string
 }
 
-variable "role_arn" {
-  type = string
-}
-
-variable "role_name" {
-  type = string
-}
-
 variable "secret_arn" {
+  type = string
+}
+
+variable "sns_topic_arn" {
   type = string
 }
 
@@ -65,105 +61,25 @@ provider "aws" {
   }
 }
 
-resource "aws_sns_topic" "results" {
-  name                        = "daily-progress-e2e-results.fifo"
-  fifo_topic                  = true
-  content_based_deduplication = true
-}
-
-resource "aws_iam_role_policy" "probe" {
-  name = "daily-progress-e2e-probe-runtime"
-  role = var.role_name
-
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [{
-      Effect = "Allow"
-      Action = [
-        "logs:CreateLogGroup",
-        "logs:CreateLogStream",
-        "logs:PutLogEvents",
-        "sns:Publish",
-      ]
-      Resource = "*"
-    }]
-  })
-}
-
-resource "aws_lambda_function" "probe" {
-  function_name = "daily-progress-e2e-probe"
-  role          = var.role_arn
-  package_type  = "Image"
-  image_uri     = var.lambda_image_uri
-  timeout       = 30
-  memory_size   = 256
-
-  environment {
-    variables = {
-      DAILY_PROGRESS_BUCKET        = var.bucket_name
-      DAILY_PROGRESS_PREFIX        = var.object_prefix
-      DAILY_PROGRESS_TIMEZONE      = var.collection_timezone
-      PROGRESS_COLLECTOR_SECRET_ID = var.secret_arn
-      SNS_TOPIC_ARN                = aws_sns_topic.results.arn
-    }
-  }
-
-  depends_on = [aws_iam_role_policy.probe]
-}
-
-resource "aws_cloudwatch_event_rule" "schedule" {
-  name                = "daily-progress-e2e-probe-schedule"
-  schedule_expression = "cron(0 10 * * ? *)"
-}
-
-resource "aws_cloudwatch_event_target" "probe" {
-  rule      = aws_cloudwatch_event_rule.schedule.name
-  target_id = "daily-progress-e2e-probe"
-  arn       = aws_lambda_function.probe.arn
-}
-
-resource "aws_lambda_permission" "eventbridge" {
-  statement_id  = "AllowEventBridgeInvoke"
-  action        = "lambda:InvokeFunction"
-  function_name = aws_lambda_function.probe.function_name
-  principal     = "events.amazonaws.com"
-  source_arn    = aws_cloudwatch_event_rule.schedule.arn
-}
-
-resource "aws_secretsmanager_secret_version" "probe" {
-  secret_id     = var.secret_arn
-  secret_string = "daily-progress-e2e-sentinel"
-}
-
-data "aws_lambda_invocation" "probe" {
-  function_name = aws_lambda_function.probe.function_name
-  input         = jsonencode({ source = "terraform-e2e" })
-
-  depends_on = [
-    aws_lambda_permission.eventbridge,
-    aws_secretsmanager_secret_version.probe,
-  ]
-}
-
 data "aws_s3_object" "probe" {
   bucket = var.bucket_name
   key    = "${var.object_prefix}/probe.json"
-
-  depends_on = [data.aws_lambda_invocation.probe]
 }
 
 data "aws_lambda_function" "probe" {
-  function_name = aws_lambda_function.probe.function_name
-
-  depends_on = [data.aws_lambda_invocation.probe]
+  function_name = var.lambda_name
 }
 
 output "invocation_result" {
-  value = data.aws_lambda_invocation.probe.result
+  value = var.invocation_result
 }
 
 output "lambda_environment" {
   value = data.aws_lambda_function.probe.environment[0].variables
+}
+
+output "lambda_arn" {
+  value = data.aws_lambda_function.probe.arn
 }
 
 output "object_body" {
@@ -174,14 +90,10 @@ output "object_content_type" {
   value = data.aws_s3_object.probe.content_type
 }
 
-output "schedule_expression" {
-  value = aws_cloudwatch_event_rule.schedule.schedule_expression
-}
-
-output "schedule_target_arn" {
-  value = aws_cloudwatch_event_target.probe.arn
-}
-
 output "sns_topic_arn" {
-  value = aws_sns_topic.results.arn
+  value = var.sns_topic_arn
+}
+
+output "secret_arn" {
+  value = var.secret_arn
 }
